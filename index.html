@@ -25,13 +25,21 @@
 </head>
 <body class="p-4 md:p-8">
 
+    <!-- 
+        【開発者への注意】
+        このアプリはGitHub等で公開されることを想定し、パスワードをハッシュ化して比較しています。
+        ただし、クライアントサイドJavaScriptによる認証は、ブラウザ側でロジックが閲覧可能なため、
+        厳密なセキュリティを保証するものではありません。
+        より高いセキュリティが必要な場合は、Firebase AuthやサーバーサイドDBの導入を検討してください。
+    -->
+
     <!-- 認証画面 -->
     <div id="authScreen" class="fixed inset-0 z-[100] bg-gray-100 flex items-center justify-center p-4">
         <div class="card p-8 w-full max-w-md text-center">
             <h2 class="text-2xl font-bold text-blue-800 mb-6">自治会システム 認証</h2>
             <p class="text-gray-600 mb-4 text-sm">アクセスするにはパスワードを入力してください</p>
             <input type="password" id="passwordInput" placeholder="パスワードを入力" class="w-full p-3 border rounded-lg mb-4 focus:ring-2 focus:ring-blue-500 outline-none">
-            <button onclick="checkPassword()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition duration-200">
+            <button onclick="handleLogin()" id="loginBtn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition duration-200">
                 ログイン
             </button>
             <p id="authError" class="text-red-500 text-sm mt-3 hidden">パスワードが正しくありません</p>
@@ -152,40 +160,46 @@
     </div>
 
     <script>
-        // パスワードを直接書かずにハッシュ値（SHA-256）で管理
-        // "acity2026" のハッシュ値
-        const PASSWORD_HASH = "80f6889f0326e0e4708103c0042738743f5507119e71965f9793f77366395353";
+        /**
+         * セキュリティに関する補足:
+         * GitHub等の公開リポジトリでは、クライアントサイドのソースコードは誰でも閲覧可能です。
+         * そのため、PASSWORD_HASHを解読したり、認証処理を書き換えてバイパスしたりすることが可能です。
+         * * 対策案：
+         * 1. 機密性が非常に高い場合は、Firebaseなどのバックエンド認証を導入する。
+         * 2. GitHubリポジトリを「Private（非公開）」に設定する。
+         * 3. 本来の認証ロジックを別ファイルに切り出し、ビルド時に隠蔽する。
+         */
+        const _v = "80f6889f0326e0e4708103c0042738743f5507119e71965f9793f77366395353";
         
         let reports = [];
         let isEditing = false;
 
-        // 文字列をSHA-256ハッシュに変換する関数
-        async function sha256(message) {
-            const msgBuffer = new TextEncoder().encode(message);
-            const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
-            const hashArray = Array.from(new Uint8Array(hashBuffer));
-            return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+        async function _h(s) {
+            const b = new TextEncoder().encode(s);
+            const r = await crypto.subtle.digest('SHA-256', b);
+            return Array.from(new Uint8Array(r)).map(x => x.toString(16).padStart(2, '0')).join('');
         }
 
-        // パスワードチェック
-        async function checkPassword() {
-            const input = document.getElementById('passwordInput').value;
-            const error = document.getElementById('authError');
+        async function handleLogin() {
+            const i = document.getElementById('passwordInput').value;
+            const e = document.getElementById('authError');
+            const btn = document.getElementById('loginBtn');
             
-            // 入力値をハッシュ化して比較
-            const inputHash = await sha256(input);
+            btn.disabled = true;
+            const h = await _h(i);
             
-            if (inputHash === PASSWORD_HASH) {
+            if (h === _v) {
                 document.getElementById('authScreen').style.display = 'none';
                 document.getElementById('mainContent').style.display = 'block';
                 loadReports();
             } else {
-                error.classList.remove('hidden');
+                e.classList.remove('hidden');
+                btn.disabled = false;
             }
         }
 
         document.getElementById('passwordInput').addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') checkPassword();
+            if (e.key === 'Enter') handleLogin();
         });
 
         window.onload = () => {
@@ -202,10 +216,8 @@
             }
         }
 
-        // フォーム送信イベント（新規登録 兼 編集保存）
         document.getElementById('reportForm').addEventListener('submit', (e) => {
             e.preventDefault();
-
             const editId = document.getElementById('editId').value;
             const reportData = {
                 date: document.getElementById('date').value,
@@ -224,14 +236,9 @@
                 }
                 cancelEdit();
             } else {
-                const newReport = {
-                    id: Date.now(),
-                    ...reportData
-                };
-                reports.unshift(newReport);
+                reports.unshift({ id: Date.now(), ...reportData });
                 showMessage('日報を登録しました');
             }
-
             saveAndRender();
             resetForm();
         });
@@ -244,20 +251,13 @@
         function renderReports() {
             const container = document.getElementById('reportContainer');
             container.innerHTML = '';
-
-            if (reports.length === 0) {
-                toggleEmptyMessage(true);
-                return;
-            }
+            if (reports.length === 0) { toggleEmptyMessage(true); return; }
             toggleEmptyMessage(false);
 
             reports.forEach(report => {
                 const row = document.createElement('tr');
                 row.className = "hover:bg-blue-50 transition-colors cursor-pointer group";
-                row.onclick = (e) => {
-                    if (e.target.tagName !== 'BUTTON') openModal(report);
-                };
-                
+                row.onclick = (e) => { if (e.target.tagName !== 'BUTTON') openModal(report); };
                 row.innerHTML = `
                     <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">${report.date}</td>
                     <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
@@ -265,13 +265,9 @@
                         <div class="text-xs text-gray-400">${report.district}</div>
                     </td>
                     <td class="px-4 py-4 whitespace-nowrap text-sm">
-                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
-                            ${report.category}
-                        </span>
+                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">${report.category}</span>
                     </td>
-                    <td class="px-4 py-4 text-sm text-gray-600 max-w-xs truncate">
-                        ${report.content}
-                    </td>
+                    <td class="px-4 py-4 text-sm text-gray-600 max-w-xs truncate">${report.content}</td>
                     <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-500">${report.expenses}</td>
                     <td class="px-4 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
                         <button onclick="startEdit(${report.id})" class="text-blue-600 hover:text-blue-900 font-bold px-2 py-1 rounded bg-blue-50">編集</button>
@@ -282,28 +278,23 @@
             });
         }
 
-        // 編集モード開始
         function startEdit(id) {
-            const report = reports.find(r => r.id === id);
-            if (!report) return;
-
+            const r = reports.find(x => x.id === id);
+            if (!r) return;
             isEditing = true;
-            document.getElementById('editId').value = report.id;
-            document.getElementById('date').value = report.date;
-            document.getElementById('name').value = report.name;
-            document.getElementById('district').value = report.district;
-            document.getElementById('category').value = report.category;
-            document.getElementById('content').value = report.content;
-            document.getElementById('expenses').value = report.expenses === 'なし' ? '' : report.expenses;
-
+            document.getElementById('editId').value = r.id;
+            document.getElementById('date').value = r.date;
+            document.getElementById('name').value = r.name;
+            document.getElementById('district').value = r.district;
+            document.getElementById('category').value = r.category;
+            document.getElementById('content').value = r.content;
+            document.getElementById('expenses').value = r.expenses === 'なし' ? '' : r.expenses;
             document.getElementById('formTitle').innerText = '日報を編集';
             document.getElementById('submitBtn').innerText = '変更を保存する';
             document.getElementById('cancelEditBtn').classList.remove('hidden');
-            
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
 
-        // 編集キャンセル
         function cancelEdit() {
             isEditing = false;
             resetForm();
@@ -318,40 +309,37 @@
             document.getElementById('date').valueAsDate = new Date();
         }
 
-        function openModal(report) {
+        function openModal(r) {
             const modal = document.getElementById('detailModal');
             const content = document.getElementById('modalContent');
-            
             content.innerHTML = `
                 <div class="grid grid-cols-3 gap-2 border-b pb-2 text-left">
                     <span class="text-gray-500 text-sm font-medium">日付</span>
-                    <span class="col-span-2 font-semibold text-gray-800">${report.date}</span>
+                    <span class="col-span-2 font-semibold text-gray-800">${r.date}</span>
                 </div>
                 <div class="grid grid-cols-3 gap-2 border-b pb-2 text-left">
                     <span class="text-gray-500 text-sm font-medium">報告者</span>
-                    <span class="col-span-2 font-semibold text-gray-800">${report.name} (${report.district})</span>
+                    <span class="col-span-2 font-semibold text-gray-800">${r.name} (${r.district})</span>
                 </div>
                 <div class="grid grid-cols-3 gap-2 border-b pb-2 text-left">
                     <span class="text-gray-500 text-sm font-medium">区分</span>
-                    <span class="col-span-2"><span class="bg-blue-100 text-blue-800 px-2 py-0.5 rounded text-xs font-bold">${report.category}</span></span>
+                    <span class="col-span-2"><span class="bg-blue-100 text-blue-800 px-2 py-0.5 rounded text-xs font-bold">${r.category}</span></span>
                 </div>
                 <div class="space-y-1 text-left">
                     <span class="text-gray-500 text-sm font-medium block">活動内容</span>
-                    <div class="bg-gray-50 p-3 rounded text-gray-800 whitespace-pre-wrap leading-relaxed border border-gray-100">${report.content}</div>
+                    <div class="bg-gray-50 p-3 rounded text-gray-800 whitespace-pre-wrap leading-relaxed border border-gray-100">${r.content}</div>
                 </div>
                 <div class="space-y-1 text-left">
                     <span class="text-gray-500 text-sm font-medium block">経費明細</span>
-                    <div class="text-gray-800 font-medium">${report.expenses}</div>
+                    <div class="text-gray-800 font-medium">${r.expenses}</div>
                 </div>
             `;
-            
             modal.classList.remove('hidden');
             document.body.style.overflow = 'hidden'; 
         }
 
         function closeModal() {
-            const modal = document.getElementById('detailModal');
-            modal.classList.add('hidden');
+            document.getElementById('detailModal').classList.add('hidden');
             document.body.style.overflow = 'auto';
         }
 
@@ -359,48 +347,37 @@
             if (confirm('この日報を削除してもよろしいですか？')) {
                 reports = reports.filter(r => r.id !== id);
                 saveAndRender();
-                if (isEditing && document.getElementById('editId').value == id) {
-                    cancelEdit();
-                }
+                if (isEditing && document.getElementById('editId').value == id) cancelEdit();
             }
         }
 
         function toggleEmptyMessage(show) {
             const msg = document.getElementById('emptyMessage');
             const table = document.getElementById('reportTable');
-            if (show) {
-                msg.classList.remove('hidden');
-                table.classList.add('hidden');
-            } else {
-                msg.classList.add('hidden');
-                table.classList.remove('hidden');
-            }
+            show ? (msg.classList.remove('hidden'), table.classList.add('hidden')) : (msg.classList.add('hidden'), table.classList.remove('hidden'));
         }
 
         function showMessage(text) {
-            const toast = document.createElement('div');
-            toast.className = "fixed bottom-5 right-5 bg-gray-800 text-white px-6 py-3 rounded-lg shadow-lg transition-opacity duration-500 z-50";
-            toast.innerText = text;
-            document.body.appendChild(toast);
-            setTimeout(() => {
-                toast.style.opacity = '0';
-                setTimeout(() => toast.remove(), 500);
-            }, 3000);
+            const t = document.createElement('div');
+            t.className = "fixed bottom-5 right-5 bg-gray-800 text-white px-6 py-3 rounded-lg shadow-lg transition-opacity duration-500 z-50";
+            t.innerText = text;
+            document.body.appendChild(t);
+            setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 500); }, 3000);
         }
 
         function exportCSV() {
             if (reports.length === 0) return;
-            let csvContent = "日付,氏名,住区,区分,内容,経費\n"
+            let csv = "日付,氏名,住区,区分,内容,経費\n"
                 + reports.map(r => `"${r.date}","${r.name}","${r.district}","${r.category}","${r.content.replace(/"/g, '""')}","${r.expenses.replace(/"/g, '""')}"`).join("\n");
-            const bom = new Uint8Array([0xEF, 0xBB, 0xBF]);
-            const blob = new Blob([bom, csvContent], { type: "text/csv;charset=utf-8" });
+            const b = new Uint8Array([0xEF, 0xBB, 0xBF]);
+            const blob = new Blob([b, csv], { type: "text/csv;charset=utf-8" });
             const url = URL.createObjectURL(blob);
-            const link = document.createElement("a");
-            link.setAttribute("href", url);
-            link.setAttribute("download", `自治会日報_${new Date().toLocaleDateString()}.csv`);
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `自治会日報_${new Date().toLocaleDateString()}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
             URL.revokeObjectURL(url);
         }
     </script>
