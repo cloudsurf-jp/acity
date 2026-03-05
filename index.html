@@ -225,21 +225,26 @@
             }, 3000);
         }
 
-        // CSVエクスポート機能
+        // CSVエクスポート機能 (文字化け対策: BOM付きUTF-8)
         function exportCSV() {
             if (reports.length === 0) return;
             
-            let csvContent = "data:text/csv;charset=utf-8," 
-                + "日付,氏名,住区,区分,内容,経費\n"
-                + reports.map(r => `"${r.date}","${r.name}","${r.district}","${r.category}","${r.content}","${r.expenses}"`).join("\n");
+            // ヘッダーとデータ
+            let csvContent = "日付,氏名,住区,区分,内容,経費\n"
+                + reports.map(r => `"${r.date}","${r.name}","${r.district}","${r.category}","${r.content.replace(/"/g, '""')}","${r.expenses.replace(/"/g, '""')}"`).join("\n");
             
-            const encodedUri = encodeURI(csvContent);
+            // BOM (Byte Order Mark) を追加して、Excel等での文字化けを防止
+            const bom = new Uint8Array([0xEF, 0xBB, 0xBF]);
+            const blob = new Blob([bom, csvContent], { type: "text/csv;charset=utf-8" });
+            
+            const url = URL.createObjectURL(blob);
             const link = document.createElement("a");
-            link.setAttribute("href", encodedUri);
+            link.setAttribute("href", url);
             link.setAttribute("download", `自治会日報_${new Date().toLocaleDateString()}.csv`);
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
+            URL.revokeObjectURL(url);
         }
     </script>
 </body>
