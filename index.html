@@ -90,7 +90,11 @@
                     <label class="block text-sm font-medium text-gray-700">経費明細（あれば）</label>
                     <input type="text" id="expenses" placeholder="例：消耗品代 500円" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border">
                 </div>
-                <div class="md:col-span-2 text-right">
+                <div class="md:col-span-2 text-right space-x-2">
+                    <label class="inline-flex items-center text-sm text-gray-600 mr-4">
+                        <input type="checkbox" id="sendMailCheckbox" class="rounded border-gray-300 text-blue-600 focus:ring-blue-500 mr-2">
+                        登録時にメール報告を準備する
+                    </label>
                     <button type="submit" id="submitBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg transition duration-200">
                         日報を登録する
                     </button>
@@ -143,14 +147,19 @@
             <div class="p-6 space-y-4 max-h-[70vh] overflow-y-auto" id="modalContent">
                 <!-- 詳細内容がここに挿入される -->
             </div>
-            <div class="bg-gray-50 p-4 text-right border-t">
-                <button onclick="closeModal()" class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded font-medium">閉じる</button>
+            <div class="bg-gray-50 p-4 flex justify-between items-center border-t">
+                <button id="modalMailBtn" class="bg-blue-100 text-blue-700 hover:bg-blue-200 px-4 py-2 rounded font-medium text-sm flex items-center">
+                    <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
+                    メールで共有
+                </button>
+                <button onclick="closeModal()" class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded font-medium text-sm">閉じる</button>
             </div>
         </div>
     </div>
 
     <script>
         const CORRECT_PASSWORD = 'acity2026';
+        const NOTIFICATION_EMAIL = 'nishida316@gmail.com';
         let reports = [];
         let isEditing = false;
 
@@ -191,6 +200,7 @@
             e.preventDefault();
 
             const editId = document.getElementById('editId').value;
+            const shouldSendMail = document.getElementById('sendMailCheckbox').checked;
             const reportData = {
                 date: document.getElementById('date').value,
                 name: document.getElementById('name').value,
@@ -201,7 +211,6 @@
             };
 
             if (isEditing) {
-                // 編集時
                 const index = reports.findIndex(r => r.id == editId);
                 if (index !== -1) {
                     reports[index] = { ...reports[index], ...reportData };
@@ -209,13 +218,17 @@
                 }
                 cancelEdit();
             } else {
-                // 新規登録
                 const newReport = {
                     id: Date.now(),
                     ...reportData
                 };
                 reports.unshift(newReport);
                 showMessage('日報を登録しました');
+                
+                // メール通知チェックが入っていればメーラーを起動
+                if (shouldSendMail) {
+                    sendNotificationEmail(newReport);
+                }
             }
 
             saveAndRender();
@@ -241,7 +254,6 @@
                 const row = document.createElement('tr');
                 row.className = "hover:bg-blue-50 transition-colors cursor-pointer group";
                 row.onclick = (e) => {
-                    // ボタン類をクリックしたときは詳細を開かない
                     if (e.target.tagName !== 'BUTTON') openModal(report);
                 };
                 
@@ -287,7 +299,6 @@
             document.getElementById('submitBtn').innerText = '変更を保存する';
             document.getElementById('cancelEditBtn').classList.remove('hidden');
             
-            // フォームまでスクロール
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
 
@@ -309,7 +320,10 @@
         function openModal(report) {
             const modal = document.getElementById('detailModal');
             const content = document.getElementById('modalContent');
+            const mailBtn = document.getElementById('modalMailBtn');
             
+            mailBtn.onclick = () => sendNotificationEmail(report);
+
             content.innerHTML = `
                 <div class="grid grid-cols-3 gap-2 border-b pb-2 text-left">
                     <span class="text-gray-500 text-sm font-medium">日付</span>
@@ -341,6 +355,23 @@
             const modal = document.getElementById('detailModal');
             modal.classList.add('hidden');
             document.body.style.overflow = 'auto';
+        }
+
+        // メール通知（メーラー起動）
+        function sendNotificationEmail(report) {
+            const subject = encodeURIComponent(`【自治会日報】${report.date}_${report.name}`);
+            const body = encodeURIComponent(
+                `自治会活動日報が登録されました。\n\n` +
+                `【日付】: ${report.date}\n` +
+                `【報告者】: ${report.name} (${report.district})\n` +
+                `【活動区分】: ${report.category}\n` +
+                `【活動内容】:\n${report.content}\n\n` +
+                `【経費】: ${report.expenses}\n\n` +
+                `--------------------------\n` +
+                `※このメールは自治会日報システムより作成されました。`
+            );
+            
+            window.location.href = `mailto:${NOTIFICATION_EMAIL}?subject=${subject}&body=${body}`;
         }
 
         function deleteReport(id) {
