@@ -18,10 +18,28 @@
         /* モーダル用アニメーション */
         .modal-enter { opacity: 0; transform: scale(0.9); }
         .modal-enter-active { opacity: 1; transform: scale(1); transition: all 0.2s ease-out; }
+        
+        /* 認証前の非表示設定 */
+        #mainContent { display: none; }
     </style>
 </head>
 <body class="p-4 md:p-8">
-    <div class="max-w-4xl mx-auto">
+
+    <!-- 認証画面 -->
+    <div id="authScreen" class="fixed inset-0 z-[100] bg-gray-100 flex items-center justify-center p-4">
+        <div class="card p-8 w-full max-w-md text-center">
+            <h2 class="text-2xl font-bold text-blue-800 mb-6">自治会システム 認証</h2>
+            <p class="text-gray-600 mb-4 text-sm">アクセスするにはパスワードを入力してください</p>
+            <input type="password" id="passwordInput" placeholder="パスワードを入力" class="w-full p-3 border rounded-lg mb-4 focus:ring-2 focus:ring-blue-500 outline-none">
+            <button onclick="checkPassword()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition duration-200">
+                ログイン
+            </button>
+            <p id="authError" class="text-red-500 text-sm mt-3 hidden">パスワードが正しくありません</p>
+        </div>
+    </div>
+
+    <!-- メインコンテンツ -->
+    <div id="mainContent" class="max-w-4xl mx-auto">
         <header class="mb-8 text-center">
             <h1 class="text-3xl font-bold text-blue-800">自治会活動日報システム</h1>
             <p class="text-gray-600 mt-2">役員の皆様の活動を記録し、透明性の高い運営をサポートします</p>
@@ -128,11 +146,36 @@
     </div>
 
     <script>
-        // データ保持用の配列
+        const CORRECT_PASSWORD = 'acity2026';
         let reports = [];
 
-        // 初期化: ローカルストレージから読み込み
+        // パスワードチェック
+        function checkPassword() {
+            const input = document.getElementById('passwordInput').value;
+            const error = document.getElementById('authError');
+            
+            if (input === CORRECT_PASSWORD) {
+                document.getElementById('authScreen').style.display = 'none';
+                document.getElementById('mainContent').style.display = 'block';
+                // 認証成功後にデータをロード
+                loadReports();
+            } else {
+                error.classList.remove('hidden');
+            }
+        }
+
+        // エンターキーでもログイン可能に
+        document.getElementById('passwordInput').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') checkPassword();
+        });
+
+        // 初期化
         window.onload = () => {
+            // 今日をデフォルトの日付に設定
+            document.getElementById('date').valueAsDate = new Date();
+        };
+
+        function loadReports() {
             const savedReports = localStorage.getItem('neighborhood_reports');
             if (savedReports) {
                 reports = JSON.parse(savedReports);
@@ -140,9 +183,7 @@
             } else {
                 toggleEmptyMessage(true);
             }
-            // 今日をデフォルトの日付に設定
-            document.getElementById('date').valueAsDate = new Date();
-        };
+        }
 
         // フォーム送信イベント
         document.getElementById('reportForm').addEventListener('submit', (e) => {
@@ -158,20 +199,18 @@
                 expenses: document.getElementById('expenses').value || 'なし'
             };
 
-            reports.unshift(newReport); // 新しいものを上に
+            reports.unshift(newReport);
             saveAndRender();
             e.target.reset();
             document.getElementById('date').valueAsDate = new Date();
             showMessage('日報を登録しました');
         });
 
-        // データの保存と描画
         function saveAndRender() {
             localStorage.setItem('neighborhood_reports', JSON.stringify(reports));
             renderReports();
         }
 
-        // 描画処理
         function renderReports() {
             const container = document.getElementById('reportContainer');
             container.innerHTML = '';
@@ -185,13 +224,8 @@
             reports.forEach(report => {
                 const row = document.createElement('tr');
                 row.className = "hover:bg-blue-50 transition-colors cursor-pointer group";
-                
-                // 行全体をクリック可能に
                 row.onclick = (e) => {
-                    // 削除ボタンをクリックした場合はモーダルを開かない
-                    if (e.target.tagName !== 'BUTTON') {
-                        openModal(report);
-                    }
+                    if (e.target.tagName !== 'BUTTON') openModal(report);
                 };
                 
                 row.innerHTML = `
@@ -217,7 +251,6 @@
             });
         }
 
-        // モーダルを開く
         function openModal(report) {
             const modal = document.getElementById('detailModal');
             const content = document.getElementById('modalContent');
@@ -249,14 +282,12 @@
             document.body.style.overflow = 'hidden'; 
         }
 
-        // モーダルを閉じる
         function closeModal() {
             const modal = document.getElementById('detailModal');
             modal.classList.add('hidden');
             document.body.style.overflow = 'auto';
         }
 
-        // 削除処理
         function deleteReport(id) {
             if (confirm('この日報を削除してもよろしいですか？')) {
                 reports = reports.filter(r => r.id !== id);
@@ -287,16 +318,12 @@
             }, 3000);
         }
 
-        // CSVエクスポート機能 (文字化け対策: BOM付きUTF-8)
         function exportCSV() {
             if (reports.length === 0) return;
-            
             let csvContent = "日付,氏名,住区,区分,内容,経費\n"
                 + reports.map(r => `"${r.date}","${r.name}","${r.district}","${r.category}","${r.content.replace(/"/g, '""')}","${r.expenses.replace(/"/g, '""')}"`).join("\n");
-            
             const bom = new Uint8Array([0xEF, 0xBB, 0xBF]);
             const blob = new Blob([bom, csvContent], { type: "text/csv;charset=utf-8" });
-            
             const url = URL.createObjectURL(blob);
             const link = document.createElement("a");
             link.setAttribute("href", url);
