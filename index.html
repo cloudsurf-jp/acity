@@ -25,14 +25,6 @@
 </head>
 <body class="p-4 md:p-8">
 
-    <!-- 
-        【開発者への注意】
-        このアプリはGitHub等で公開されることを想定し、パスワードをハッシュ化して比較しています。
-        ただし、クライアントサイドJavaScriptによる認証は、ブラウザ側でロジックが閲覧可能なため、
-        厳密なセキュリティを保証するものではありません。
-        より高いセキュリティが必要な場合は、Firebase AuthやサーバーサイドDBの導入を検討してください。
-    -->
-
     <!-- 認証画面 -->
     <div id="authScreen" class="fixed inset-0 z-[100] bg-gray-100 flex items-center justify-center p-4">
         <div class="card p-8 w-full max-w-md text-center">
@@ -160,41 +152,22 @@
     </div>
 
     <script>
-        /**
-         * セキュリティに関する補足:
-         * GitHub等の公開リポジトリでは、クライアントサイドのソースコードは誰でも閲覧可能です。
-         * そのため、PASSWORD_HASHを解読したり、認証処理を書き換えてバイパスしたりすることが可能です。
-         * * 対策案：
-         * 1. 機密性が非常に高い場合は、Firebaseなどのバックエンド認証を導入する。
-         * 2. GitHubリポジトリを「Private（非公開）」に設定する。
-         * 3. 本来の認証ロジックを別ファイルに切り出し、ビルド時に隠蔽する。
-         */
-        const _v = "80f6889f0326e0e4708103c0042738743f5507119e71965f9793f77366395353";
+        // パスワード設定（元の形式に戻しました）
+        const PASS = "acity2026";
         
         let reports = [];
         let isEditing = false;
 
-        async function _h(s) {
-            const b = new TextEncoder().encode(s);
-            const r = await crypto.subtle.digest('SHA-256', b);
-            return Array.from(new Uint8Array(r)).map(x => x.toString(16).padStart(2, '0')).join('');
-        }
-
-        async function handleLogin() {
-            const i = document.getElementById('passwordInput').value;
-            const e = document.getElementById('authError');
-            const btn = document.getElementById('loginBtn');
+        function handleLogin() {
+            const input = document.getElementById('passwordInput').value;
+            const error = document.getElementById('authError');
             
-            btn.disabled = true;
-            const h = await _h(i);
-            
-            if (h === _v) {
+            if (input === PASS) {
                 document.getElementById('authScreen').style.display = 'none';
                 document.getElementById('mainContent').style.display = 'block';
                 loadReports();
             } else {
-                e.classList.remove('hidden');
-                btn.disabled = false;
+                error.classList.remove('hidden');
             }
         }
 
