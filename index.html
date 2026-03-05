@@ -15,12 +15,9 @@
             border-radius: 8px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
-        @media print {
-            .no-print { display: none; }
-            .print-only { display: block; }
-            body { background: white; }
-            .card { box-shadow: none; border: 1px solid #ccc; }
-        }
+        /* モーダル用アニメーション */
+        .modal-enter { opacity: 0; transform: scale(0.9); }
+        .modal-enter-active { opacity: 1; transform: scale(1); transition: all 0.2s ease-out; }
     </style>
 </head>
 <body class="p-4 md:p-8">
@@ -31,7 +28,7 @@
         </header>
 
         <!-- 入力フォーム -->
-        <section class="card p-6 mb-8 no-print">
+        <section class="card p-6 mb-8">
             <h2 class="text-xl font-semibold mb-4 border-b pb-2 text-gray-700">新規日報作成</h2>
             <form id="reportForm" class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
@@ -83,9 +80,8 @@
         <section class="card p-6">
             <div class="flex justify-between items-center mb-4">
                 <h2 class="text-xl font-semibold text-gray-700">活動履歴一覧</h2>
-                <div class="space-x-2 no-print">
+                <div class="space-x-2">
                     <button onclick="exportCSV()" class="text-sm bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700">CSV出力</button>
-                    <button onclick="window.print()" class="text-sm bg-gray-600 text-white px-3 py-1 rounded hover:bg-gray-700">印刷</button>
                 </div>
             </div>
             
@@ -98,7 +94,7 @@
                             <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">区分</th>
                             <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">活動内容</th>
                             <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">経費</th>
-                            <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider no-print">操作</th>
+                            <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">操作</th>
                         </tr>
                     </thead>
                     <tbody id="reportContainer" class="bg-white divide-y divide-gray-200">
@@ -110,6 +106,25 @@
                 データがありません。上のフォームから登録してください。
             </div>
         </section>
+    </div>
+
+    <!-- 詳細表示用モーダル -->
+    <div id="detailModal" class="fixed inset-0 z-50 flex items-center justify-center hidden">
+        <div class="fixed inset-0 bg-black opacity-50" onclick="closeModal()"></div>
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-lg mx-4 z-10 overflow-hidden transform transition-all">
+            <div class="bg-blue-800 p-4 flex justify-between items-center">
+                <h3 class="text-white font-bold text-lg">活動日報 詳細</h3>
+                <button onclick="closeModal()" class="text-white hover:text-gray-200">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <div class="p-6 space-y-4 max-h-[70vh] overflow-y-auto" id="modalContent">
+                <!-- 詳細内容がここに挿入される -->
+            </div>
+            <div class="bg-gray-50 p-4 text-right border-t">
+                <button onclick="closeModal()" class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded font-medium">閉じる</button>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -169,7 +184,16 @@
 
             reports.forEach(report => {
                 const row = document.createElement('tr');
-                row.className = "hover:bg-gray-50 transition-colors";
+                row.className = "hover:bg-blue-50 transition-colors cursor-pointer group";
+                
+                // 行全体をクリック可能に
+                row.onclick = (e) => {
+                    // 削除ボタンをクリックした場合はモーダルを開かない
+                    if (e.target.tagName !== 'BUTTON') {
+                        openModal(report);
+                    }
+                };
+                
                 row.innerHTML = `
                     <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">${report.date}</td>
                     <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
@@ -181,16 +205,55 @@
                             ${report.category}
                         </span>
                     </td>
-                    <td class="px-4 py-4 text-sm text-gray-600 max-w-xs truncate" title="${report.content}">
+                    <td class="px-4 py-4 text-sm text-gray-600 max-w-xs truncate">
                         ${report.content}
                     </td>
                     <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-500">${report.expenses}</td>
-                    <td class="px-4 py-4 whitespace-nowrap text-right text-sm font-medium no-print">
-                        <button onclick="deleteReport(${report.id})" class="text-red-600 hover:text-red-900 ml-4">削除</button>
+                    <td class="px-4 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <button onclick="deleteReport(${report.id})" class="text-red-600 hover:text-red-900 ml-4 p-2">削除</button>
                     </td>
                 `;
                 container.appendChild(row);
             });
+        }
+
+        // モーダルを開く
+        function openModal(report) {
+            const modal = document.getElementById('detailModal');
+            const content = document.getElementById('modalContent');
+            
+            content.innerHTML = `
+                <div class="grid grid-cols-3 gap-2 border-b pb-2 text-left">
+                    <span class="text-gray-500 text-sm font-medium">日付</span>
+                    <span class="col-span-2 font-semibold text-gray-800">${report.date}</span>
+                </div>
+                <div class="grid grid-cols-3 gap-2 border-b pb-2 text-left">
+                    <span class="text-gray-500 text-sm font-medium">報告者</span>
+                    <span class="col-span-2 font-semibold text-gray-800">${report.name} (${report.district})</span>
+                </div>
+                <div class="grid grid-cols-3 gap-2 border-b pb-2 text-left">
+                    <span class="text-gray-500 text-sm font-medium">区分</span>
+                    <span class="col-span-2"><span class="bg-blue-100 text-blue-800 px-2 py-0.5 rounded text-xs font-bold">${report.category}</span></span>
+                </div>
+                <div class="space-y-1 text-left">
+                    <span class="text-gray-500 text-sm font-medium block">活動内容</span>
+                    <div class="bg-gray-50 p-3 rounded text-gray-800 whitespace-pre-wrap leading-relaxed border border-gray-100">${report.content}</div>
+                </div>
+                <div class="space-y-1 text-left">
+                    <span class="text-gray-500 text-sm font-medium block">経費明細</span>
+                    <div class="text-gray-800 font-medium">${report.expenses}</div>
+                </div>
+            `;
+            
+            modal.classList.remove('hidden');
+            document.body.style.overflow = 'hidden'; 
+        }
+
+        // モーダルを閉じる
+        function closeModal() {
+            const modal = document.getElementById('detailModal');
+            modal.classList.add('hidden');
+            document.body.style.overflow = 'auto';
         }
 
         // 削除処理
@@ -214,7 +277,6 @@
         }
 
         function showMessage(text) {
-            // 簡易的な通知
             const toast = document.createElement('div');
             toast.className = "fixed bottom-5 right-5 bg-gray-800 text-white px-6 py-3 rounded-lg shadow-lg transition-opacity duration-500 z-50";
             toast.innerText = text;
@@ -229,11 +291,9 @@
         function exportCSV() {
             if (reports.length === 0) return;
             
-            // ヘッダーとデータ
             let csvContent = "日付,氏名,住区,区分,内容,経費\n"
                 + reports.map(r => `"${r.date}","${r.name}","${r.district}","${r.category}","${r.content.replace(/"/g, '""')}","${r.expenses.replace(/"/g, '""')}"`).join("\n");
             
-            // BOM (Byte Order Mark) を追加して、Excel等での文字化けを防止
             const bom = new Uint8Array([0xEF, 0xBB, 0xBF]);
             const blob = new Blob([bom, csvContent], { type: "text/csv;charset=utf-8" });
             
